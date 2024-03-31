@@ -43,3 +43,20 @@ Status of implementation:
 - COMMENT ON
   - TABLE
   - COLUMN
+
+## TODO
+
+The goal is to re-create all objects which will be deleted on a `DROP TABLE` command.
+Sample output is created by creating a table with all possible objects and
+then run `pg_dump` before and after `DROP TABLE` and then reconstruct the difference.
+
+## Hint
+
+To get a hint on how to get the SQL statements needed use the `psql` option `-E`
+or `--echo-hidden` which will display queries that internal commands generate.
+
+Example:
+
+    psql -E -c "CREATE TABLE foo(i int)"
+    psql -E -c "COMMENT ON TABLE foo IS 'A comment'"
+    psql -E -c "DROP TABLE foo"
