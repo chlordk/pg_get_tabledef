@@ -30,7 +30,7 @@ BEGIN
 		AND pg_catalog.pg_table_is_visible(c.oid);
 	-- If table not found exit
 	IF NOT FOUND THEN
-		RAISE EXCEPTION 'Table ''%'' not found.', $1;
+		RAISE EXCEPTION 'Did not find any relation named "%".', $1;
 		RETURN;
 	END IF;
 	R := 'CREATE TABLE ' || v_schema || '."' || v_table || '" (';
@@ -58,6 +58,9 @@ BEGIN
 		IF rec.attnotnull THEN
 			R := R || ' NOT NULL';
 		END IF;
+		IF LENGTH(rec.pg_get_expr) > 0 THEN
+			R := R || ' DEFAULT ' || rec.pg_get_expr;
+		END IF;
 		IF rec.attnum < count_columns THEN
 			R := R || ','; -- no comma after last column definition
 		END IF;
@@ -66,6 +69,7 @@ BEGIN
 	-- Finalize table
 	R := ');';
 	RETURN NEXT;
+	-- ALTER TABLE public.t1 OWNER TO hasch;
 	-- Add COMMENTs
 	SELECT obj_description(v_oid) INTO tmp_text;
 	IF LENGTH(tmp_text) > 0 THEN
