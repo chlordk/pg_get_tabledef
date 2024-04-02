@@ -8,18 +8,18 @@ LANGUAGE plpgsql
 AS $_$
 -- pg_get_tabledef ( text ) → text
 -- Reconstructs the underlying CREATE command for a table and objects related to a table.
+-- Parameter: Table name
 -- (This is a decompiled reconstruction, not the original text of the command.)
 DECLARE
-	R TEXT; -- Return result
-	R_c TEXT; -- Comments result, show after table definition
+	R TEXT := ''; -- Return result
+	R_c TEXT := ''; -- Comments result, show after table definition
 	rec RECORD;
 	tmp_text TEXT;
 	v_oid OID; -- Table object id
 	v_schema TEXT; -- Schema
 	v_table TEXT; -- Table name
-	rxrelname TEXT;
+	rxrelname TEXT :=  '^(' || $1 || ')$';
 BEGIN
-	rxrelname :=  '^(' || $1 || ')$';
 	-- Get oid and schema
 	SELECT
 		c.oid, n.nspname, c.relname
@@ -38,8 +38,6 @@ BEGIN
 	SELECT obj_description(v_oid) INTO tmp_text;
 	IF LENGTH(tmp_text) > 0 THEN
 		R_c := 'COMMENT ON TABLE ' || v_schema || '."' || v_table || '" IS ''' || tmp_text || ''';' || E'\n';
-	ELSE
-		R_c := '';
 	END IF;
 	R := 'CREATE TABLE ' || v_schema || '."' || v_table || '" (';
 	-- Get columns
@@ -71,7 +69,7 @@ BEGIN
 		-- Comment on column
 		SELECT col_description( v_oid, rec.attnum) INTO tmp_text;
 		IF LENGTH(tmp_text) > 0 THEN
-			R_c := R_c || 'COMMENT ON COLUMN ' || v_schema || '."' || v_table || '.' || rec.attname || '" IS ''' || tmp_text || ''';' || E'\n';
+			R_c := R_c || 'COMMENT ON COLUMN ' || v_schema || '."' || v_table || '"."' || rec.attname || '" IS ''' || tmp_text || ''';' || E'\n';
 		END IF;
 	END LOOP; -- Columns
 	-- Finalize table
