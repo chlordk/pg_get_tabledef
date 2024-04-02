@@ -3,7 +3,7 @@
 -- psql --tuples-only --no-align --command="SELECT pg_get_tabledef('foo')"
 
 CREATE OR REPLACE FUNCTION pg_get_tabledef(TEXT)
-RETURNS TEXT
+RETURNS TABLE(R TEXT)
 LANGUAGE plpgsql
 AS $_$
 -- pg_get_tabledef ( text ) → text
@@ -11,10 +11,9 @@ AS $_$
 -- Parameter: Table name
 -- (This is a decompiled reconstruction, not the original text of the command.)
 DECLARE
-	R TEXT := ''; -- Return result
-	R_c TEXT := ''; -- Comments result, show after table definition
 	rec RECORD;
 	tmp_text TEXT;
+	count_columns INTEGER := 0; -- Number of columns in the table
 	v_oid OID; -- Table object id
 	v_schema TEXT; -- Schema
 	v_table TEXT; -- Table name
@@ -31,20 +30,17 @@ BEGIN
 		AND pg_catalog.pg_table_is_visible(c.oid);
 	-- If table not found exit
 	IF NOT FOUND THEN
-		-- RAISE EXCEPTION 'Table % not found', $1;
-		RETURN '-- Table not found: ''' || $1 || '''';
-	END IF;
-	-- Table comment first, columns comment second, init variable R_c, 
-	SELECT obj_description(v_oid) INTO tmp_text;
-	IF LENGTH(tmp_text) > 0 THEN
-		R_c := 'COMMENT ON TABLE ' || v_schema || '."' || v_table || '" IS ''' || tmp_text || ''';' || E'\n';
+		RAISE EXCEPTION 'Table ''%'' not found.', $1;
+		RETURN;
 	END IF;
 	R := 'CREATE TABLE ' || v_schema || '."' || v_table || '" (';
+	RETURN NEXT;
 	-- Get columns
+	SELECT COUNT(a.attnum) INTO count_columns FROM pg_catalog.pg_attribute a WHERE a.attrelid = v_oid AND a.attnum > 0 AND NOT a.attisdropped;
 	FOR rec IN
 		SELECT
 			a.attname,
-			pg_catalog.format_type(a.atttypid, a.atttypmod),
+			pg_catalog.format_type(a.atttypid, a.atttypmod) AS format_type,
 			(SELECT pg_catalog.pg_get_expr(d.adbin, d.adrelid, true)
 			 FROM pg_catalog.pg_attrdef d
 			 WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef),
@@ -58,26 +54,38 @@ BEGIN
 		WHERE a.attrelid = v_oid AND a.attnum > 0 AND NOT a.attisdropped
 		ORDER BY a.attnum
 	LOOP
-		--RAISE NOTICE '% % %', rec.attnum, rec.attname, rec.format_type;
-		IF rec.attnum > 1 THEN
-			R := R || ','; -- no comma after last column definition
-		END IF;
-		R := R || E'\n' || '	"' || rec.attname || '" ' || rec.format_type;
+		R := E'\t' || '"' || rec.attname || '" ' || rec.format_type;
 		IF rec.attnotnull THEN
 			R := R || ' NOT NULL';
 		END IF;
-		-- Comment on column
-		SELECT col_description( v_oid, rec.attnum) INTO tmp_text;
-		IF LENGTH(tmp_text) > 0 THEN
-			R_c := R_c || 'COMMENT ON COLUMN ' || v_schema || '."' || v_table || '"."' || rec.attname || '" IS ''' || tmp_text || ''';' || E'\n';
+		IF rec.attnum < count_columns THEN
+			R := R || ','; -- no comma after last column definition
 		END IF;
+		RETURN NEXT;
 	END LOOP; -- Columns
 	-- Finalize table
-	R := R || E'\n' || ');' || E'\n';
+	R := ');';
+	RETURN NEXT;
 	-- Add COMMENTs
-	IF LENGTH(R_c) > 0 THEN
-		R := R || R_c;
+	SELECT obj_description(v_oid) INTO tmp_text;
+	IF LENGTH(tmp_text) > 0 THEN
+		R := 'COMMENT ON TABLE ' || v_schema || '."' || v_table || '" IS ''' || tmp_text || ''';';
+		RETURN NEXT;
 	END IF;
+	FOR rec IN
+		SELECT
+			a.attnum,
+			a.attname
+		FROM pg_catalog.pg_attribute a
+		WHERE a.attrelid = v_oid AND a.attnum > 0 AND NOT a.attisdropped
+		ORDER BY a.attnum
+	LOOP
+		SELECT col_description( v_oid, rec.attnum) INTO tmp_text;
+		IF LENGTH(tmp_text) > 0 THEN
+			R := 'COMMENT ON COLUMN ' || v_schema || '."' || v_table || '"."' || rec.attname || '" IS ''' || tmp_text || ''';';
+			RETURN NEXT;
+		END IF;
+	END LOOP; -- Comments
 	-- Index
 	FOR rec IN 
 		SELECT
@@ -87,10 +95,9 @@ BEGIN
 		WHERE c.oid = v_oid AND c.oid = i.indrelid AND i.indexrelid = c2.oid
 		ORDER BY i.indisprimary DESC, c2.relname
 	LOOP
-		R := R || rec.indexdef || ';' || E'\n';
+		R := rec.indexdef || ';';
+		RETURN NEXT;
 	END LOOP; -- Index
-	RETURN R;
-END;
-$_$;
+END; $_$;
 
 -- vim: tabstop=4 noexpandtab :
