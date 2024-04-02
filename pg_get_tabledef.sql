@@ -11,13 +11,13 @@ AS $_$
 -- Parameter: Table name
 -- (This is a decompiled reconstruction, not the original text of the command.)
 DECLARE
-	rec RECORD;
-	tmp_text TEXT;
-	count_columns INTEGER := 0; -- Number of columns in the table
-	v_oid OID; -- Table object id
-	v_schema TEXT; -- Schema
-	v_table TEXT; -- Table name
-	rxrelname TEXT :=  '^(' || $1 || ')$';
+	rec record;
+	tmp_text text;
+	count_columns integer := 0; -- Number of columns in the table
+	v_oid oid; -- Table object id
+	v_schema text; -- Schema
+	v_table text; -- Table name
+	rxrelname text :=  '^(' || $1 || ')$';
 BEGIN
 	-- Get oid and schema
 	SELECT
@@ -33,7 +33,13 @@ BEGIN
 		RAISE EXCEPTION 'Did not find any relation named "%".', $1;
 		RETURN;
 	END IF;
-	R := 'CREATE TABLE ' || v_schema || '."' || v_table || '" (';
+	R := 'CREATE TABLE ' || v_schema || '.';
+	IF v_table ~ '[A-Z]' THEN
+		R := R ||'"' || v_table || '"';
+	ELSE
+		R := R || v_table;
+	END IF;
+	R := R || ' (';
 	RETURN NEXT;
 	-- Get columns
 	SELECT COUNT(a.attnum) INTO count_columns FROM pg_catalog.pg_attribute a WHERE a.attrelid = v_oid AND a.attnum > 0 AND NOT a.attisdropped;
@@ -54,7 +60,13 @@ BEGIN
 		WHERE a.attrelid = v_oid AND a.attnum > 0 AND NOT a.attisdropped
 		ORDER BY a.attnum
 	LOOP
-		R := E'\t' || '"' || rec.attname || '" ' || rec.format_type;
+		R := E'\t';
+		IF rec.attname ~ '[A-Z]' THEN
+			R := R || '"' || rec.attname || '" ';
+		ELSE
+			R := R || rec.attname || ' ';
+		END IF;
+		R := R || rec.format_type;
 		IF rec.attnotnull THEN
 			R := R || ' NOT NULL';
 		END IF;
@@ -73,7 +85,13 @@ BEGIN
 	-- Add COMMENTs
 	SELECT obj_description(v_oid) INTO tmp_text;
 	IF LENGTH(tmp_text) > 0 THEN
-		R := 'COMMENT ON TABLE ' || v_schema || '."' || v_table || '" IS ''' || tmp_text || ''';';
+		R := 'COMMENT ON TABLE ' || v_schema || '.';
+		IF v_table ~ '[A-Z]' THEN
+			R := R || '"' || v_table || '"';
+		ELSE
+			R := R || v_table;
+		END IF;
+		R := R || ' IS ''' || tmp_text || ''';';
 		RETURN NEXT;
 	END IF;
 	FOR rec IN
@@ -86,7 +104,19 @@ BEGIN
 	LOOP
 		SELECT col_description( v_oid, rec.attnum) INTO tmp_text;
 		IF LENGTH(tmp_text) > 0 THEN
-			R := 'COMMENT ON COLUMN ' || v_schema || '."' || v_table || '"."' || rec.attname || '" IS ''' || tmp_text || ''';';
+			R := 'COMMENT ON COLUMN ' || v_schema || '.';
+			IF v_table ~ '[A-Z]' THEN
+				R := R || '"' || v_table || '"';
+			ELSE
+				R := R || v_table;
+			END IF;
+			R := R || '.';
+			IF rec.attname ~ '[A-Z]' THEN
+				R := R || '"' || rec.attname || '"';
+			ELSE
+				R := R || rec.attname;
+			END IF;
+			R := R || ' IS ''' || tmp_text || ''';';
 			RETURN NEXT;
 		END IF;
 	END LOOP; -- Comments
