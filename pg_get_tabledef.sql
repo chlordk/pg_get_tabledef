@@ -1,6 +1,7 @@
 -- License: MIT
 -- Author: Hans Schou <hans@schou.dk> © 2024
--- psql --tuples-only --no-align --command="SELECT pg_get_tabledef('foo')"
+-- Example of use:
+--   psql --tuples-only --no-align --command="SELECT pg_get_tabledef('foo')"
 
 CREATE OR REPLACE FUNCTION pg_get_tabledef(TEXT)
 RETURNS TABLE(R TEXT)
@@ -34,7 +35,7 @@ BEGIN
 		RETURN;
 	END IF;
 	R := 'CREATE TABLE ' || v_schema || '.';
-	IF v_table ~ '[A-Z]' THEN
+	IF v_table ~ '[A-Z]' THEN -- check camelCase
 		R := R ||'"' || v_table || '"';
 	ELSE
 		R := R || v_table;

@@ -10,12 +10,12 @@ Sample run & output:
     $ psql --tuples-only --no-align --command="SELECT pg_get_tabledef('tC')"
 
     CREATE TABLE public."tC" (
-        "iC" integer NOT NULL,
-        "cC" text
+        "iC" bigint NOT NULL DEFAULT nextval('"tC_iC_seq"'::regclass),
+        "cC" text NOT NULL
     );
     COMMENT ON TABLE public."tC" IS 'Table Camel Case comment';
-    COMMENT ON COLUMN public."tC.iC" IS 'tC.iC comment';
-    COMMENT ON COLUMN public."tC.cC" IS 'tC.cC comment';
+    COMMENT ON COLUMN public."tC"."iC" IS 'tC.iC comment';
+    COMMENT ON COLUMN public."tC"."cC" IS 'tC.cC comment';
     CREATE UNIQUE INDEX "tC_cC" ON "tC" USING btree ("cC");
     CREATE UNIQUE INDEX "tC_iC_cC" ON "tC" USING btree ("iC", "cC");
 
@@ -27,7 +27,7 @@ Install the function `pg_get_tabledef`:
 
 Install test data in database `tabledef` as PostgreSQL superuser:
 
-    psql -f create-tabledef.sql
+    psql -f create-test-tabledef.sql
 
 Dump sample table with indexes and comments:
 
@@ -39,6 +39,7 @@ Status of implementation:
 
 - CREATE TABLE
   - NOT NULL
+  - DEFAULT
 - CREATE INDEX
 - COMMENT ON
   - TABLE

@@ -8,7 +8,7 @@ CREATE TABLE t1 (i int PRIMARY KEY);
 DROP TABLE IF EXISTS t2;
 CREATE TABLE t2 (i2 serial, c1 TEXT);
 CREATE UNIQUE INDEX t2_i2_c1 ON t2 (i2,c1);
-CREATE TABLE "tC" ("iC" bigserial, "cC" TEXT);
+CREATE TABLE "tC" ("iC" bigserial, "cC" TEXT NOT NULL CHECK ("cC" ~* '[A-Z]+'));
 CREATE UNIQUE INDEX "tC_cC" ON "tC" ("cC");
 CREATE UNIQUE INDEX "tC_iC_cC" ON "tC" ("iC","cC");
 COMMENT ON TABLE t1 IS 'T1 comment';
