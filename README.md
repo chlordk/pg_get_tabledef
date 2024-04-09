@@ -7,17 +7,20 @@ Version: beta
 
 Sample run & output:
 
-    $ psql --tuples-only --no-align --command="SELECT pg_get_tabledef('tC')"
+    $ psql --tuples-only --no-align --command="SELECT pg_get_tabledef('t2')"
 
-    CREATE TABLE public."tC" (
-        "iC" bigint NOT NULL DEFAULT nextval('"tC_iC_seq"'::regclass),
-        "cC" text NOT NULL
+    CREATE TABLE public.t2 (
+        i2 integer NOT NULL DEFAULT nextval('t2_i2_seq'::regclass),
+        c1 text NOT NULL,
+        CONSTRAINT t2_c1_check CHECK (c1 ~* '[a-m]+'::text)
     );
-    COMMENT ON TABLE public."tC" IS 'Table Camel Case comment';
-    COMMENT ON COLUMN public."tC"."iC" IS 'tC.iC comment';
-    COMMENT ON COLUMN public."tC"."cC" IS 'tC.cC comment';
-    CREATE UNIQUE INDEX "tC_cC" ON "tC" USING btree ("cC");
-    CREATE UNIQUE INDEX "tC_iC_cC" ON "tC" USING btree ("iC", "cC");
+    COMMENT ON TABLE public.t2 IS 'T2 comment';
+    COMMENT ON COLUMN public.t2.i2 IS 'T2.i2 comment';
+    COMMENT ON COLUMN public.t2.c1 IS 'T2.c1 comment';
+    CREATE SEQUENCE public.t2_i2_seq
+        AS integer
+        CACHE 1;
+    CREATE UNIQUE INDEX t2_i2_c1 ON t2 USING btree (i2, c1);
 
 ## Installation & test
 
@@ -61,3 +64,11 @@ Example:
     psql -E -c "CREATE TABLE foo(i int)"
     psql -E -c "COMMENT ON TABLE foo IS 'A comment'"
     psql -E -c "DROP TABLE foo"
+
+## Bug report
+
+If the table output of `pg_dump` is different from `pg_get_tabledef` it is probably 
+considered a bug. Run the following command and send the output together with the
+output from `pg_get_tabledef`.
+
+    pg_dump --schema-only -d <db> -t <table> | egrep -v '^-|^$|^SET |^SELECT'

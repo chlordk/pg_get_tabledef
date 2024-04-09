@@ -15,6 +15,7 @@ DECLARE
 	rec record;
 	tmp_text text;
 	count_columns integer := 0; -- Number of columns in the table
+	count_constraint integer := 0;
 	v_oid oid; -- Table object id
 	v_schema text; -- Schema
 	v_table text; -- Table name
@@ -44,6 +45,7 @@ BEGIN
 	RETURN NEXT;
 	-- Get columns
 	SELECT COUNT(a.attnum) INTO count_columns FROM pg_catalog.pg_attribute a WHERE a.attrelid = v_oid AND a.attnum > 0 AND NOT a.attisdropped;
+	SELECT COUNT(r.conname) INTO count_constraint FROM pg_catalog.pg_constraint r WHERE r.conrelid = v_oid AND r.contype = 'c';
 	FOR rec IN
 		SELECT
 			a.attname,
@@ -74,11 +76,24 @@ BEGIN
 		IF LENGTH(rec.pg_get_expr) > 0 THEN
 			R := R || ' DEFAULT ' || rec.pg_get_expr;
 		END IF;
-		IF rec.attnum < count_columns THEN
-			R := R || ','; -- no comma after last column definition
+		IF rec.attnum < count_columns OR count_constraint > 0 THEN
+			R := R || ','; -- no comma after last column definition or constraints
 		END IF;
 		RETURN NEXT;
 	END LOOP; -- Columns
+	-- Constraints
+	IF count_constraint > 0 THEN
+		FOR rec IN
+			SELECT r.conname, pg_catalog.pg_get_constraintdef(r.oid, true)
+			FROM pg_catalog.pg_constraint r
+			WHERE r.conrelid = v_oid AND r.contype = 'c'
+			ORDER BY 1
+		LOOP
+			-- RAISE NOTICE 'CONSTRAINT % %', rec.conname, rec.pg_get_constraintdef;
+			R := E'\t' || 'CONSTRAINT ' || rec.conname || ' ' || rec.pg_get_constraintdef;
+			RETURN NEXT;
+		END LOOP;
+	END IF; -- Constraints
 	-- Finalize table
 	R := ');';
 	RETURN NEXT;
@@ -121,6 +136,34 @@ BEGIN
 			RETURN NEXT;
 		END IF;
 	END LOOP; -- Comments
+	-- Sequence
+	FOR rec IN
+		SELECT
+			a.attname,
+			pg_catalog.format_type(a.atttypid, a.atttypmod) AS format_type,
+			(SELECT pg_catalog.pg_get_expr(d.adbin, d.adrelid, true)
+			 FROM pg_catalog.pg_attrdef d
+			 WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef),
+			a.attnotnull,
+			(SELECT c.collname FROM pg_catalog.pg_collation c, pg_catalog.pg_type t
+			 WHERE c.oid = a.attcollation AND t.oid = a.atttypid AND a.attcollation <> t.typcollation) AS attcollation,
+			a.attidentity,
+			a.attgenerated,
+			a.attnum
+		FROM pg_catalog.pg_attribute a
+		WHERE a.attrelid = v_oid AND a.attnum > 0 AND NOT a.attisdropped
+		ORDER BY a.attnum
+	LOOP
+		tmp_text :=  pg_get_serial_sequence(v_table, rec.attname);
+		IF LENGTH(tmp_text) > 0 THEN
+			R := 'CREATE SEQUENCE ' || tmp_text;
+			RETURN NEXT;
+			R := E'\t' || 'AS ' || rec.format_type; 
+			RETURN NEXT;
+			R := E'\t' || 'CACHE 1;';
+			RETURN NEXT;
+		END IF;
+	END LOOP; -- Sequence
 	-- Index
 	FOR rec IN 
 		SELECT
